@@ -17,11 +17,13 @@ from functools import lru_cache
 
 import packaging.version
 
+@lru_cache
+def is_qft_available() -> bool:
+    return importlib.util.find_spec("qfinetuning") is not None
 
 @lru_cache
 def is_bnb_available() -> bool:
     return importlib.util.find_spec("bitsandbytes") is not None
-
 
 @lru_cache
 def is_bnb_4bit_available() -> bool:

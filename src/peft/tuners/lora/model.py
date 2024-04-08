@@ -28,7 +28,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from peft.import_utils import is_bnb_4bit_available, is_bnb_available
+from peft.import_utils import is_bnb_4bit_available, is_bnb_available, is_qft_available
 from peft.tuners.tuners_utils import (
     BaseTuner,
     BaseTunerLayer,
@@ -242,12 +242,20 @@ class LoraModel(BaseTuner):
                 new_module.base_layer.state = child.state
             else:
                 new_module.state = child.state
-            new_module.to(child.weight.device)
+            if hasattr(child, "Wq"):
+                new_module.to(child.Wq.device)
+            else:
+                new_module.to(child.weight.device)
 
         # dispatch to correct device
         for name, module in new_module.named_modules():
             if (self.prefix in name) or ("ranknum" in name):
-                weight = child.qweight if hasattr(child, "qweight") else child.weight
+                if hasattr(child, "qweight"):
+                    weight = child.qweight
+                elif hasattr(child, "Wq"):
+                    weight = child.Wq
+                else:
+                    weight =  child.weight
                 module.to(weight.device)
 
     def _mark_only_adapters_as_trainable(self, model: nn.Module) -> None:
@@ -276,6 +284,10 @@ class LoraModel(BaseTuner):
         # Collect dispatcher functions to decide what backend to use for the replaced LoRA layer. The order matters,
         # because the first match is always used. Therefore, the default layers should be checked last.
         dispatchers = []
+
+        if is_qft_available():
+            from .qft import dispatch_qft_8bit_normal
+            dispatchers.append(dispatch_qft_8bit_normal)
 
         # avoid eager bnb import
         if is_bnb_available():
