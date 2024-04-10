@@ -242,8 +242,11 @@ class LoraModel(BaseTuner):
                 new_module.base_layer.state = child.state
             else:
                 new_module.state = child.state
-            if hasattr(child, "Wq"):
+
+            if hasattr(child, "Wq") and child.Wq is not None:
                 new_module.to(child.Wq.device)
+            elif hasattr(child, "device"):
+                new_module.to(child.device)
             else:
                 new_module.to(child.weight.device)
 
@@ -251,12 +254,13 @@ class LoraModel(BaseTuner):
         for name, module in new_module.named_modules():
             if (self.prefix in name) or ("ranknum" in name):
                 if hasattr(child, "qweight"):
-                    weight = child.qweight
-                elif hasattr(child, "Wq"):
-                    weight = child.Wq
+                    module.to(child.qweight.device)
+                elif hasattr(child, "Wq") and child.Wq is not None:
+                    new_module.to(child.Wq.device)
+                elif hasattr(child, "device"):
+                    new_module.to(child.device)
                 else:
-                    weight =  child.weight
-                module.to(weight.device)
+                    new_module.to(child.weight.device)
 
     def _mark_only_adapters_as_trainable(self, model: nn.Module) -> None:
         for n, p in model.named_parameters():
